@@ -115,6 +115,7 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 	}
 
 	var tempSum, cpuSum, memSum, memUsedGBSum, loadSum float64
+	var memUsedGBCount int
 	for _, sample := range samples {
 		if sample.TempMilliC < stats.tempMin {
 			stats.tempMin = sample.TempMilliC
@@ -125,7 +126,10 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		tempSum += float64(sample.TempMilliC)
 		cpuSum += sample.CPUPercent
 		memSum += sample.MemUsedPct
-		memUsedGBSum += sample.MemUsedGB
+		if sample.MemUsedGB > 0 {
+			memUsedGBSum += sample.MemUsedGB
+			memUsedGBCount++
+		}
 		loadSum += sample.Load1
 		if sample.CPUPercent > stats.cpuMax {
 			stats.cpuMax = sample.CPUPercent
@@ -150,7 +154,9 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 	stats.tempAvg = (tempSum / float64(len(samples))) / 1000
 	stats.cpuAvg = cpuSum / float64(len(samples))
 	stats.memAvg = memSum / float64(len(samples))
-	stats.memUsedAvgGB = memUsedGBSum / float64(len(samples))
+	if memUsedGBCount > 0 {
+		stats.memUsedAvgGB = memUsedGBSum / float64(memUsedGBCount)
+	}
 	stats.loadAvg = loadSum / float64(len(samples))
 	stats.tempSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
 		return float64(sample.TempMilliC) / 1000

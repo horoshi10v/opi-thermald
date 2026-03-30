@@ -25,7 +25,7 @@ Go module: `github.com/horoshi10v/opi-thermald`
 - Sends Telegram alerts with hysteresis and cooldown
 - Exports daily and weekly CSV snapshots
 - Sends daily and weekly summaries as Telegram photos with a caption
-- Keeps up to 8 days of raw samples
+- Keeps up to `storage.sample_retention_days` of raw samples, default `8`
 
 ## Project layout
 
@@ -87,6 +87,7 @@ Update:
 - `telegram_bot_token`
 - `telegram_chat_id`
 - `host_alias`
+- `storage.sample_retention_days`
 - temperature thresholds
 
 ### 5. Install systemd unit

@@ -4,6 +4,9 @@
   "telegram_bot_token": "123456789:replace_me",
   "telegram_chat_id": "123456789",
   "host_alias": "orangepi-ultra",
+  "storage": {
+    "sample_retention_days": 8
+  },
   "temperature": {
     "sensor_path": "/sys/class/thermal/thermal_zone0/temp",
     "warn_millic": 75000,

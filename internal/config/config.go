@@ -16,6 +16,7 @@ type Config struct {
 	HostAlias           string `json:"host_alias"`
 
 	Temperature TemperatureConfig `json:"temperature"`
+	Storage     StorageConfig     `json:"storage"`
 	Summary     SummaryConfig     `json:"summary"`
 }
 
@@ -33,6 +34,10 @@ type SummaryConfig struct {
 	WeeklyISO    int `json:"weekly_iso_weekday"`
 	WeeklyHour   int `json:"weekly_hour"`
 	WeeklyMinute int `json:"weekly_minute"`
+}
+
+type StorageConfig struct {
+	SampleRetentionDays int `json:"sample_retention_days"`
 }
 
 func Load(path string) (Config, error) {
@@ -62,6 +67,9 @@ func Load(path string) (Config, error) {
 	if cfg.Summary.WeeklyISO < 1 || cfg.Summary.WeeklyISO > 7 {
 		cfg.Summary.WeeklyISO = 7
 	}
+	if cfg.Storage.SampleRetentionDays <= 0 {
+		cfg.Storage.SampleRetentionDays = 8
+	}
 	if cfg.HostAlias == "" {
 		host, _ := os.Hostname()
 		cfg.HostAlias = host
@@ -81,4 +89,8 @@ func (c Config) PollInterval() time.Duration {
 
 func (c Config) AlertCooldown() time.Duration {
 	return time.Duration(c.Temperature.AlertCooldownMinute) * time.Minute
+}
+
+func (c Config) SampleRetention() time.Duration {
+	return time.Duration(c.Storage.SampleRetentionDays) * 24 * time.Hour
 }

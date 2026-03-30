@@ -84,7 +84,7 @@ func (s *Service) tick() error {
 	if err := s.store.AppendSample(sample); err != nil {
 		return fmt.Errorf("append sample: %w", err)
 	}
-	if err := s.store.PruneSamples(time.Now().Add(-8 * 24 * time.Hour)); err != nil {
+	if err := s.store.PruneSamples(time.Now().Add(-s.cfg.SampleRetention())); err != nil {
 		return fmt.Errorf("prune samples: %w", err)
 	}
 

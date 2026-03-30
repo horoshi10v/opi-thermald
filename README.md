@@ -127,6 +127,7 @@ sudo systemctl restart opi-thermald
 - `/temp` returns the current CPU temperature
 - `/status` returns the current temperature, CPU, load, memory, and disk usage
 - `/summary` sends the current daily summary immediately
+- `/weekly` sends the current weekly summary immediately
 
 ## Runtime files
 

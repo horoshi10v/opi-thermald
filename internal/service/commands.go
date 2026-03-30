@@ -11,6 +11,7 @@ const (
 	commandTemp    = "/temp"
 	commandStatus  = "/status"
 	commandSummary = "/summary"
+	commandWeekly  = "/weekly"
 )
 
 func (s *Service) handleCommands(sample collector.Sample) error {
@@ -42,6 +43,10 @@ func (s *Service) handleCommands(sample collector.Sample) error {
 			}
 		case commandSummary:
 			if err := s.sendSummary(sample.Timestamp, dailySummarySpec); err != nil {
+				return err
+			}
+		case commandWeekly:
+			if err := s.sendSummary(sample.Timestamp, weeklySummarySpec); err != nil {
 				return err
 			}
 		}

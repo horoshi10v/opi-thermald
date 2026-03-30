@@ -77,8 +77,63 @@ func (s *Service) tick() error {
 	if err := s.handleSummaries(sample.Timestamp); err != nil {
 		log.Printf("summaries failed: %v", err)
 	}
+	if err := s.handleCommands(sample); err != nil {
+		log.Printf("commands failed: %v", err)
+	}
 
 	return s.store.SaveState(s.state)
+}
+
+func (s *Service) handleCommands(sample collector.Sample) error {
+	updates, err := s.telegram.GetUpdates(s.state.LastUpdateID + 1)
+	if err != nil {
+		return err
+	}
+
+	for _, update := range updates {
+		if update.UpdateID > s.state.LastUpdateID {
+			s.state.LastUpdateID = update.UpdateID
+		}
+
+		if update.Message.Text == "" {
+			continue
+		}
+
+		if fmt.Sprintf("%d", update.Message.Chat.ID) != s.cfg.TelegramChatID {
+			continue
+		}
+
+		switch strings.TrimSpace(update.Message.Text) {
+		case "/temp":
+			msg := fmt.Sprintf(
+				"%s current temperature: %.1fC",
+				s.cfg.HostAlias,
+				float64(sample.TempMilliC)/1000,
+			)
+			if err := s.telegram.Send(msg); err != nil {
+				return err
+			}
+		case "/status":
+			msg := fmt.Sprintf(
+				"%s status\nTemp: %.1fC\nCPU: %.2f%%\nLoad1: %.2f\nMem: %.2f%%\nDisk: %.2f%%",
+				s.cfg.HostAlias,
+				float64(sample.TempMilliC)/1000,
+				sample.CPUPercent,
+				sample.Load1,
+				sample.MemUsedPct,
+				sample.DiskUsedPct,
+			)
+			if err := s.telegram.Send(msg); err != nil {
+				return err
+			}
+		case "/summary":
+			if err := s.sendSummary(sample.Timestamp, 24*time.Hour, "daily"); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) handleAlerts(sample collector.Sample) error {

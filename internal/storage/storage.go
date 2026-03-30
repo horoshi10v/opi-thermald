@@ -17,6 +17,7 @@ type State struct {
 	LastAlertSentAt  time.Time `json:"last_alert_sent_at"`
 	LastDailySentAt  time.Time `json:"last_daily_sent_at"`
 	LastWeeklySentAt time.Time `json:"last_weekly_sent_at"`
+	LastUpdateID     int64     `json:"last_update_id"`
 }
 
 type Store struct {

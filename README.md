@@ -118,6 +118,12 @@ sudo systemctl restart opi-thermald
 4. Obtain your `chat_id`
 5. Put both values into `/etc/opi-thermald/config.json`
 
+## Telegram commands
+
+- `/temp` returns the current CPU temperature
+- `/status` returns the current temperature, CPU, load, memory, and disk usage
+- `/summary` sends the current daily summary immediately
+
 ## Runtime files
 
 - Config: `/etc/opi-thermald/config.json`

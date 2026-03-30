@@ -63,12 +63,12 @@ func bucketize(samples []collector.Sample, bucketCount int, valueFn func(collect
 
 func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error) {
 	const (
-		width        = 1280
-		height       = 860
-		outerPadding = 40
-		headerHeight = 86
-		footerHeight = 44
-		panelGap     = 24
+		width        = 1600
+		height       = 1080
+		outerPadding = 48
+		headerHeight = 110
+		footerHeight = 52
+		panelGap     = 28
 	)
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -84,8 +84,8 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 	loadColor := color.RGBA{74, 222, 128, 255}
 
 	fillRect(img, outerPadding, outerPadding, width-outerPadding*2, height-outerPadding*2, panelBg)
-	drawTinyText(img, outerPadding+20, outerPadding+18, title, text)
-	drawTinyText(img, outerPadding+20, outerPadding+46, "DARK THEME SUMMARY", muted)
+	drawText(img, outerPadding+24, outerPadding+20, title, 3, text)
+	drawText(img, outerPadding+24, outerPadding+62, "DARK THEME SUMMARY", 2, muted)
 
 	panelTop := outerPadding + headerHeight
 	panelWidth := width - outerPadding*2 - 32
@@ -123,7 +123,7 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 		muted,
 	)
 
-	drawTinyText(img, outerPadding+20, height-outerPadding-22, "EXPORTS RAW DATA TO CSV AND SENDS PNG TO TELEGRAM", muted)
+	drawText(img, outerPadding+24, height-outerPadding-28, "EXPORTS RAW DATA TO CSV AND SENDS PNG TO TELEGRAM", 2, muted)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -136,19 +136,21 @@ func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values
 	fillRect(img, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), color.RGBA{15, 23, 42, 255})
 	drawFrame(img, rect, gridColor)
 
-	headerY := rect.Min.Y + 16
-	drawTinyText(img, rect.Min.X+18, headerY, label, textColor)
+	headerY := rect.Min.Y + 18
+	drawText(img, rect.Min.X+20, headerY, label, 2, textColor)
 
 	minVal, maxVal := seriesBounds(values)
 	statsText := fmt.Sprintf("MIN %.1f MAX %.1f", minVal, maxVal)
-	drawTinyText(img, rect.Min.X+220, headerY, statsText, mutedColor)
+	drawText(img, rect.Min.X+320, headerY, statsText, 2, mutedColor)
 
-	plotRect := image.Rect(rect.Min.X+18, rect.Min.Y+54, rect.Max.X-18, rect.Max.Y-18)
+	scaleWidth := 88
+	plotRect := image.Rect(rect.Min.X+scaleWidth, rect.Min.Y+62, rect.Max.X-24, rect.Max.Y-22)
 	for i := 1; i < 4; i++ {
 		y := plotRect.Min.Y + i*plotRect.Dy()/4
 		drawLine(img, plotRect.Min.X, y, plotRect.Max.X, y, gridColor)
 	}
 	drawFrame(img, plotRect, gridColor)
+	drawYAxisLabels(img, plotRect, minVal, maxVal, textColor, mutedColor)
 	drawSeries(img, plotRect, values, lineColor)
 }
 
@@ -170,11 +172,22 @@ func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col col
 		}
 		norm := (value - minVal) / (maxVal - minVal)
 		y := rect.Max.Y - 1 - int(norm*float64(rect.Dy()-1))
-		fillRect(img, x-2, y-2, 5, 5, col)
+		fillRect(img, x-3, y-3, 7, 7, col)
 		if i > 0 {
-			drawLine(img, lastX, lastY, x, y, col)
+			drawLineThick(img, lastX, lastY, x, y, 2, col)
 		}
 		lastX, lastY = x, y
+	}
+}
+
+func drawYAxisLabels(img *image.RGBA, plotRect image.Rectangle, minVal, maxVal float64, textColor, mutedColor color.Color) {
+	steps := 4
+	for i := 0; i <= steps; i++ {
+		y := plotRect.Max.Y - 1 - i*(plotRect.Dy()-1)/steps
+		value := minVal + (maxVal-minVal)*(float64(i)/float64(steps))
+		label := fmt.Sprintf("%.1f", value)
+		drawText(img, plotRect.Min.X-70, y-7, label, 2, mutedColor)
+		drawLine(img, plotRect.Min.X-12, y, plotRect.Min.X-2, y, textColor)
 	}
 }
 
@@ -243,16 +256,33 @@ func drawLine(img *image.RGBA, x0, y0, x1, y1 int, col color.Color) {
 	}
 }
 
-func drawTinyText(img *image.RGBA, x, y int, text string, col color.Color) {
+func drawLineThick(img *image.RGBA, x0, y0, x1, y1, thickness int, col color.Color) {
+	if thickness <= 1 {
+		drawLine(img, x0, y0, x1, y1, col)
+		return
+	}
+	radius := thickness / 2
+	for dx := -radius; dx <= radius; dx++ {
+		for dy := -radius; dy <= radius; dy++ {
+			drawLine(img, x0+dx, y0+dy, x1+dx, y1+dy, col)
+		}
+	}
+}
+
+func drawText(img *image.RGBA, x, y int, text string, scale int, col color.Color) {
+	if scale <= 0 {
+		scale = 1
+	}
+
 	cursor := x
 	for _, r := range strings.ToUpper(text) {
 		if r == ' ' {
-			cursor += 6
+			cursor += 3 * scale
 			continue
 		}
 		pattern, ok := glyphPattern(r)
 		if !ok {
-			cursor += 6
+			cursor += 3 * scale
 			continue
 		}
 		for row, line := range pattern {
@@ -260,10 +290,11 @@ func drawTinyText(img *image.RGBA, x, y int, text string, col color.Color) {
 				if ch != '1' {
 					continue
 				}
-				fillRect(img, cursor+colIdx, y+row, 2, 2, col)
+				fillRect(img, cursor+colIdx*scale, y+row*scale, scale, scale, col)
 			}
 		}
-		cursor += 10
+		charWidth := len(pattern[0])
+		cursor += (charWidth+2)*scale + scale
 	}
 }
 

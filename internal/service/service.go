@@ -360,7 +360,7 @@ func sparkline(values []float64) string {
 		return ""
 	}
 
-	const glyphs = "▁▂▃▄▅▆▇█"
+	glyphs := []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
 	minVal := values[0]
 	maxVal := values[0]
@@ -390,7 +390,7 @@ func sparkline(values []float64) string {
 		if index >= len(glyphs) {
 			index = len(glyphs) - 1
 		}
-		b.WriteByte(glyphs[index])
+		b.WriteRune(glyphs[index])
 	}
 
 	return b.String()

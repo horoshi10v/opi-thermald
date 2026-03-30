@@ -1,0 +1,21 @@
+{
+  "poll_interval_seconds": 30,
+  "data_dir": "/var/lib/opi-thermald",
+  "telegram_bot_token": "123456789:replace_me",
+  "telegram_chat_id": "123456789",
+  "host_alias": "orangepi-ultra",
+  "temperature": {
+    "sensor_path": "/sys/class/thermal/thermal_zone0/temp",
+    "warn_millic": 75000,
+    "critical_millic": 82000,
+    "recover_millic": 70000,
+    "alert_cooldown_minutes": 30
+  },
+  "summary": {
+    "daily_hour": 21,
+    "daily_minute": 0,
+    "weekly_iso_weekday": 7,
+    "weekly_hour": 20,
+    "weekly_minute": 0
+  }
+}

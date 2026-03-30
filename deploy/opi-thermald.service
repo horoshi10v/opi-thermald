@@ -1,0 +1,20 @@
+[Unit]
+Description=Orange Pi temperature watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/opi-thermald -config /etc/opi-thermald/config.json
+Restart=always
+RestartSec=5
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/opi-thermald /etc/opi-thermald
+
+[Install]
+WantedBy=multi-user.target

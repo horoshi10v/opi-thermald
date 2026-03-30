@@ -13,12 +13,15 @@ type summaryStats struct {
 	tempAvg        float64
 	cpuAvg         float64
 	cpuMax         float64
+	memAvg         float64
+	memMax         float64
 	loadAvg        float64
 	loadMax        float64
 	aboveWarnCount int
 	sampleCount    int
 	tempSeries     []float64
 	cpuSeries      []float64
+	memSeries      []float64
 	loadSeries     []float64
 }
 
@@ -90,6 +93,7 @@ func (s *Service) sendSummary(now time.Time, spec summarySpec) error {
 		spec.label,
 		stats.tempSeries,
 		stats.cpuSeries,
+		stats.memSeries,
 		stats.loadSeries,
 	)
 	if err != nil {
@@ -106,7 +110,7 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		sampleCount: len(samples),
 	}
 
-	var tempSum, cpuSum, loadSum float64
+	var tempSum, cpuSum, memSum, loadSum float64
 	for _, sample := range samples {
 		if sample.TempMilliC < stats.tempMin {
 			stats.tempMin = sample.TempMilliC
@@ -116,9 +120,13 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		}
 		tempSum += float64(sample.TempMilliC)
 		cpuSum += sample.CPUPercent
+		memSum += sample.MemUsedPct
 		loadSum += sample.Load1
 		if sample.CPUPercent > stats.cpuMax {
 			stats.cpuMax = sample.CPUPercent
+		}
+		if sample.MemUsedPct > stats.memMax {
+			stats.memMax = sample.MemUsedPct
 		}
 		if sample.Load1 > stats.loadMax {
 			stats.loadMax = sample.Load1
@@ -130,12 +138,16 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 
 	stats.tempAvg = (tempSum / float64(len(samples))) / 1000
 	stats.cpuAvg = cpuSum / float64(len(samples))
+	stats.memAvg = memSum / float64(len(samples))
 	stats.loadAvg = loadSum / float64(len(samples))
 	stats.tempSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
 		return float64(sample.TempMilliC) / 1000
 	})
 	stats.cpuSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
 		return sample.CPUPercent
+	})
+	stats.memSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
+		return sample.MemUsedPct
 	})
 	stats.loadSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
 		return sample.Load1
@@ -146,7 +158,7 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 
 func (s *Service) formatSummaryCaption(label string, stats summaryStats) string {
 	return fmt.Sprintf(
-		"%s %s summary\nTemp min/avg/max: %.1f/%.1f/%.1fC\nCPU avg/max: %.2f/%.2f%%\nLoad1 avg/max: %.2f/%.2f\nSamples above warn: %d/%d",
+		"%s %s summary\nTemp min/avg/max: %.1f/%.1f/%.1fC\nCPU avg/max: %.2f/%.2f%%\nRAM avg/max: %.2f/%.2f%%\nLoad1 avg/max: %.2f/%.2f\nSamples above warn: %d/%d",
 		s.cfg.HostAlias,
 		label,
 		float64(stats.tempMin)/1000,
@@ -154,6 +166,8 @@ func (s *Service) formatSummaryCaption(label string, stats summaryStats) string 
 		float64(stats.tempMax)/1000,
 		stats.cpuAvg,
 		stats.cpuMax,
+		stats.memAvg,
+		stats.memMax,
 		stats.loadAvg,
 		stats.loadMax,
 		stats.aboveWarnCount,

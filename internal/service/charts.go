@@ -8,11 +8,17 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/horoshi10v/opi-thermald/internal/collector"
 )
+
+type chartSeries struct {
+	Label  string
+	Values []float64
+	Color  color.RGBA
+	Unit   string
+}
 
 func bucketize(samples []collector.Sample, bucketCount int, valueFn func(collector.Sample) float64) []float64 {
 	if len(samples) == 0 || bucketCount <= 0 {
@@ -61,75 +67,60 @@ func bucketize(samples []collector.Sample, bucketCount int, valueFn func(collect
 	return result
 }
 
-func renderSummaryChart(title, periodLabel string, temp, cpu, load []float64) ([]byte, error) {
+func renderSummaryChart(title, periodLabel string, temp, cpu, mem, load []float64) ([]byte, error) {
 	const (
 		width        = 1600
-		height       = 1080
-		outerPadding = 48
+		height       = 1320
+		outerPadding = 40
 		headerHeight = 110
-		footerHeight = 52
-		panelGap     = 28
+		footerHeight = 56
+		panelGap     = 24
 	)
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	bg := color.RGBA{10, 14, 22, 255}
+	bg := color.RGBA{8, 12, 20, 255}
 	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
 
-	panelBg := color.RGBA{17, 24, 39, 255}
-	grid := color.RGBA{51, 65, 85, 255}
-	text := color.RGBA{226, 232, 240, 255}
-	muted := color.RGBA{148, 163, 184, 255}
-	tempColor := color.RGBA{248, 113, 113, 255}
-	cpuColor := color.RGBA{96, 165, 250, 255}
-	loadColor := color.RGBA{74, 222, 128, 255}
+	renderer := newTextRenderer()
 
-	fillRect(img, outerPadding, outerPadding, width-outerPadding*2, height-outerPadding*2, panelBg)
-	drawText(img, outerPadding+24, outerPadding+18, title, 4, text)
-	drawText(img, outerPadding+24, outerPadding+62, "DARK THEME SUMMARY", 2, muted)
-	drawLegendBlock(img, outerPadding+760, outerPadding+26, tempColor, text, muted, "TEMP C")
-	drawLegendBlock(img, outerPadding+980, outerPadding+26, cpuColor, text, muted, "CPU %")
-	drawLegendBlock(img, outerPadding+1170, outerPadding+26, loadColor, text, muted, "LOAD1")
+	panelBg := color.RGBA{15, 23, 42, 255}
+	cardBg := color.RGBA{17, 24, 39, 255}
+	grid := color.RGBA{55, 65, 81, 255}
+	text := color.RGBA{241, 245, 249, 255}
+	muted := color.RGBA{148, 163, 184, 255}
+	border := color.RGBA{30, 41, 59, 255}
+
+	series := []chartSeries{
+		{Label: "Temperature", Values: temp, Color: color.RGBA{248, 113, 113, 255}, Unit: "C"},
+		{Label: "CPU", Values: cpu, Color: color.RGBA{96, 165, 250, 255}, Unit: "%"},
+		{Label: "RAM", Values: mem, Color: color.RGBA{251, 191, 36, 255}, Unit: "%"},
+		{Label: "Load1", Values: load, Color: color.RGBA{74, 222, 128, 255}, Unit: ""},
+	}
+
+	drawRoundedRect(img, image.Rect(outerPadding, outerPadding, width-outerPadding, height-outerPadding), 20, cardBg)
+	drawRoundedBorder(img, image.Rect(outerPadding, outerPadding, width-outerPadding, height-outerPadding), 20, border)
+
+	renderer.draw(img, outerPadding+28, outerPadding+44, title, 30, text)
+	renderer.draw(img, outerPadding+28, outerPadding+78, "Dark theme summary", 18, muted)
+
+	legendX := outerPadding + 760
+	for i, item := range series {
+		drawLegendBlock(img, renderer, legendX+i*190, outerPadding+28, item.Color, text, muted, item.Label)
+	}
 
 	panelTop := outerPadding + headerHeight
 	panelWidth := width - outerPadding*2 - 32
-	panelHeight := (height - outerPadding*2 - headerHeight - footerHeight - panelGap*2 - 32) / 3
+	panelHeight := (height - outerPadding*2 - headerHeight - footerHeight - panelGap*3 - 32) / 4
 	panelX := outerPadding + 16
+	axisLabels := timeAxisLabels(periodLabel)
 
-	drawSeriesPanel(
-		img,
-		image.Rect(panelX, panelTop, panelX+panelWidth, panelTop+panelHeight),
-		"TEMP C",
-		temp,
-		tempColor,
-		grid,
-		text,
-		muted,
-		timeAxisLabels(periodLabel),
-	)
-	drawSeriesPanel(
-		img,
-		image.Rect(panelX, panelTop+panelHeight+panelGap, panelX+panelWidth, panelTop+panelHeight*2+panelGap),
-		"CPU PERCENT",
-		cpu,
-		cpuColor,
-		grid,
-		text,
-		muted,
-		timeAxisLabels(periodLabel),
-	)
-	drawSeriesPanel(
-		img,
-		image.Rect(panelX, panelTop+panelHeight*2+panelGap*2, panelX+panelWidth, panelTop+panelHeight*3+panelGap*2),
-		"LOAD1",
-		load,
-		loadColor,
-		grid,
-		text,
-		muted,
-		timeAxisLabels(periodLabel),
-	)
+	for i, item := range series {
+		top := panelTop + i*(panelHeight+panelGap)
+		rect := image.Rect(panelX, top, panelX+panelWidth, top+panelHeight)
+		drawSeriesPanel(img, renderer, rect, item, grid, text, muted, panelBg, axisLabels)
+	}
 
-	drawText(img, outerPadding+24, height-outerPadding-28, "EXPORTS RAW DATA TO CSV AND SENDS PNG TO TELEGRAM", 2, muted)
+	renderer.draw(img, outerPadding+28, height-outerPadding-18, "Exports raw data to CSV and sends PNG to Telegram", 18, muted)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -138,27 +129,28 @@ func renderSummaryChart(title, periodLabel string, temp, cpu, load []float64) ([
 	return buf.Bytes(), nil
 }
 
-func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values []float64, lineColor, gridColor, textColor, mutedColor color.Color, axisLabels [3]string) {
-	fillRect(img, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), color.RGBA{15, 23, 42, 255})
-	drawFrame(img, rect, gridColor)
+func drawSeriesPanel(img *image.RGBA, renderer *textRenderer, rect image.Rectangle, series chartSeries, gridColor, textColor, mutedColor, panelBg color.Color, axisLabels [3]string) {
+	drawRoundedRect(img, rect, 16, panelBg)
+	drawRoundedBorder(img, rect, 16, gridColor)
 
-	headerY := rect.Min.Y + 18
-	drawText(img, rect.Min.X+20, headerY, label, 3, textColor)
+	headerY := rect.Min.Y + 30
+	renderer.draw(img, rect.Min.X+24, headerY, series.Label, 22, textColor)
 
-	minVal, maxVal := seriesBounds(values)
-	statsText := fmt.Sprintf("MIN %.1f MAX %.1f", minVal, maxVal)
-	drawText(img, rect.Min.X+320, headerY, statsText, 2, mutedColor)
+	minVal, maxVal := seriesBounds(series.Values)
+	statsText := fmt.Sprintf("Min %.1f%s   Max %.1f%s", minVal, series.Unit, maxVal, series.Unit)
+	renderer.draw(img, rect.Min.X+220, headerY, statsText, 16, mutedColor)
 
-	scaleWidth := 88
-	plotRect := image.Rect(rect.Min.X+scaleWidth, rect.Min.Y+62, rect.Max.X-24, rect.Max.Y-22)
+	scaleWidth := 100
+	plotRect := image.Rect(rect.Min.X+scaleWidth, rect.Min.Y+56, rect.Max.X-26, rect.Max.Y-42)
+
 	for i := 1; i < 4; i++ {
 		y := plotRect.Min.Y + i*plotRect.Dy()/4
 		drawLine(img, plotRect.Min.X, y, plotRect.Max.X, y, gridColor)
 	}
 	drawFrame(img, plotRect, gridColor)
-	drawYAxisLabels(img, plotRect, minVal, maxVal, textColor, mutedColor)
-	drawSeries(img, plotRect, values, lineColor)
-	drawXAxisLabels(img, plotRect, axisLabels, mutedColor)
+	drawYAxisLabels(img, renderer, plotRect, minVal, maxVal, series.Unit, mutedColor, textColor)
+	drawSeries(img, plotRect, series.Values, series.Color)
+	drawXAxisLabels(img, renderer, plotRect, axisLabels, mutedColor)
 }
 
 func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col color.Color) {
@@ -187,37 +179,38 @@ func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col col
 	}
 }
 
-func drawYAxisLabels(img *image.RGBA, plotRect image.Rectangle, minVal, maxVal float64, textColor, mutedColor color.Color) {
+func drawYAxisLabels(img *image.RGBA, renderer *textRenderer, plotRect image.Rectangle, minVal, maxVal float64, unit string, mutedColor, tickColor color.Color) {
 	steps := 4
 	for i := 0; i <= steps; i++ {
 		y := plotRect.Max.Y - 1 - i*(plotRect.Dy()-1)/steps
 		value := minVal + (maxVal-minVal)*(float64(i)/float64(steps))
-		label := fmt.Sprintf("%.1f", value)
-		drawText(img, plotRect.Min.X-70, y-7, label, 2, mutedColor)
-		drawLine(img, plotRect.Min.X-12, y, plotRect.Min.X-2, y, textColor)
+		label := fmt.Sprintf("%.1f%s", value, unit)
+		renderer.draw(img, plotRect.Min.X-86, y+6, label, 14, mutedColor)
+		drawLine(img, plotRect.Min.X-12, y, plotRect.Min.X-2, y, tickColor)
 	}
 }
 
-func drawXAxisLabels(img *image.RGBA, plotRect image.Rectangle, labels [3]string, mutedColor color.Color) {
-	drawText(img, plotRect.Min.X, plotRect.Max.Y+14, labels[0], 2, mutedColor)
-	midX := plotRect.Min.X + plotRect.Dx()/2 - estimateTextWidth(labels[1], 2)/2
-	drawText(img, midX, plotRect.Max.Y+14, labels[1], 2, mutedColor)
-	rightX := plotRect.Max.X - estimateTextWidth(labels[2], 2)
-	drawText(img, rightX, plotRect.Max.Y+14, labels[2], 2, mutedColor)
+func drawXAxisLabels(img *image.RGBA, renderer *textRenderer, plotRect image.Rectangle, labels [3]string, mutedColor color.Color) {
+	renderer.draw(img, plotRect.Min.X, plotRect.Max.Y+26, labels[0], 14, mutedColor)
+	midX := plotRect.Min.X + plotRect.Dx()/2 - renderer.width(labels[1], 14)/2
+	renderer.draw(img, midX, plotRect.Max.Y+26, labels[1], 14, mutedColor)
+	rightX := plotRect.Max.X - renderer.width(labels[2], 14)
+	renderer.draw(img, rightX, plotRect.Max.Y+26, labels[2], 14, mutedColor)
 }
 
-func drawLegendBlock(img *image.RGBA, x, y int, lineColor, textColor, mutedColor color.Color, label string) {
-	fillRect(img, x, y+4, 18, 18, lineColor)
-	drawText(img, x+30, y, label, 2, textColor)
-	drawText(img, x+30, y+22, "SERIES", 1, mutedColor)
+func drawLegendBlock(img *image.RGBA, renderer *textRenderer, x, y int, lineColor, textColor, mutedColor color.Color, label string) {
+	drawRoundedRect(img, image.Rect(x, y, x+160, y+42), 10, color.RGBA{10, 14, 22, 255})
+	fillRect(img, x+12, y+12, 16, 16, lineColor)
+	renderer.draw(img, x+40, y+20, label, 16, textColor)
+	renderer.draw(img, x+40, y+36, "Series", 14, mutedColor)
 }
 
 func timeAxisLabels(periodLabel string) [3]string {
-	switch strings.ToLower(periodLabel) {
+	switch periodLabel {
 	case "weekly":
-		return [3]string{"7D AGO", "MID", "NOW"}
+		return [3]string{"7D AGO", "3.5D", "NOW"}
 	default:
-		return [3]string{"24H AGO", "MID", "NOW"}
+		return [3]string{"00:00", "12:00", "NOW"}
 	}
 }
 
@@ -237,6 +230,62 @@ func seriesBounds(values []float64) (float64, float64) {
 		}
 	}
 	return minVal, maxVal
+}
+
+func drawRoundedRect(img *image.RGBA, rect image.Rectangle, radius int, col color.Color) {
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		for x := rect.Min.X; x < rect.Max.X; x++ {
+			if insideRoundedRect(x, y, rect, radius) {
+				img.Set(x, y, col)
+			}
+		}
+	}
+}
+
+func drawRoundedBorder(img *image.RGBA, rect image.Rectangle, radius int, col color.Color) {
+	outer := rect
+	inner := image.Rect(rect.Min.X+1, rect.Min.Y+1, rect.Max.X-1, rect.Max.Y-1)
+	for y := outer.Min.Y; y < outer.Max.Y; y++ {
+		for x := outer.Min.X; x < outer.Max.X; x++ {
+			if insideRoundedRect(x, y, outer, radius) && !insideRoundedRect(x, y, inner, max(radius-1, 0)) {
+				img.Set(x, y, col)
+			}
+		}
+	}
+}
+
+func insideRoundedRect(x, y int, rect image.Rectangle, radius int) bool {
+	if radius <= 0 {
+		return image.Pt(x, y).In(rect)
+	}
+	if x < rect.Min.X || x >= rect.Max.X || y < rect.Min.Y || y >= rect.Max.Y {
+		return false
+	}
+
+	left := rect.Min.X + radius
+	right := rect.Max.X - radius - 1
+	top := rect.Min.Y + radius
+	bottom := rect.Max.Y - radius - 1
+
+	if (x >= left && x <= right) || (y >= top && y <= bottom) {
+		return true
+	}
+
+	var cx, cy int
+	switch {
+	case x < left && y < top:
+		cx, cy = left, top
+	case x > right && y < top:
+		cx, cy = right, top
+	case x < left && y > bottom:
+		cx, cy = left, bottom
+	default:
+		cx, cy = right, bottom
+	}
+
+	dx := x - cx
+	dy := y - cy
+	return dx*dx+dy*dy <= radius*radius
 }
 
 func drawFrame(img *image.RGBA, rect image.Rectangle, col color.Color) {
@@ -299,98 +348,9 @@ func drawLineThick(img *image.RGBA, x0, y0, x1, y1, thickness int, col color.Col
 	}
 }
 
-func drawText(img *image.RGBA, x, y int, text string, scale int, col color.Color) {
-	if scale <= 0 {
-		scale = 1
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
-
-	cursor := x
-	for _, r := range strings.ToUpper(text) {
-		if r == ' ' {
-			cursor += 2 * scale
-			continue
-		}
-		pattern, ok := glyphPattern(r)
-		if !ok {
-			cursor += 2 * scale
-			continue
-		}
-		for row, line := range pattern {
-			for colIdx, ch := range line {
-				if ch != '1' {
-					continue
-				}
-				fillRect(img, cursor+colIdx*scale, y+row*scale, scale, scale, col)
-			}
-		}
-		charWidth := len(pattern[0])
-		cursor += (charWidth+1)*scale + 1
-	}
-}
-
-func estimateTextWidth(text string, scale int) int {
-	width := 0
-	for _, r := range strings.ToUpper(text) {
-		if r == ' ' {
-			width += 2 * scale
-			continue
-		}
-		pattern, ok := glyphPattern(r)
-		if !ok {
-			width += 2 * scale
-			continue
-		}
-		charWidth := len(pattern[0])
-		width += (charWidth+1)*scale + 1
-	}
-	return width
-}
-
-func glyphPattern(r rune) ([]string, bool) {
-	if r >= '0' && r <= '9' {
-		return digitPatterns[r], true
-	}
-	pattern, ok := alphaPatterns[r]
-	return pattern, ok
-}
-
-var digitPatterns = map[rune][]string{
-	'0': {"111", "101", "101", "101", "111"},
-	'1': {"010", "110", "010", "010", "111"},
-	'2': {"111", "001", "111", "100", "111"},
-	'3': {"111", "001", "111", "001", "111"},
-	'4': {"101", "101", "111", "001", "001"},
-	'5': {"111", "100", "111", "001", "111"},
-	'6': {"111", "100", "111", "101", "111"},
-	'7': {"111", "001", "001", "001", "001"},
-	'8': {"111", "101", "111", "101", "111"},
-	'9': {"111", "101", "111", "001", "111"},
-}
-
-var alphaPatterns = map[rune][]string{
-	'A': {"010", "101", "111", "101", "101"},
-	'B': {"110", "101", "110", "101", "110"},
-	'C': {"011", "100", "100", "100", "011"},
-	'D': {"110", "101", "101", "101", "110"},
-	'E': {"111", "100", "110", "100", "111"},
-	'G': {"011", "100", "101", "101", "011"},
-	'H': {"101", "101", "111", "101", "101"},
-	'I': {"111", "010", "010", "010", "111"},
-	'L': {"100", "100", "100", "100", "111"},
-	'M': {"101", "111", "111", "101", "101"},
-	'N': {"101", "111", "111", "111", "101"},
-	'O': {"111", "101", "101", "101", "111"},
-	'P': {"111", "101", "111", "100", "100"},
-	'R': {"110", "101", "110", "101", "101"},
-	'S': {"011", "100", "010", "001", "110"},
-	'T': {"111", "010", "010", "010", "010"},
-	'U': {"101", "101", "101", "101", "111"},
-	'W': {"101", "101", "111", "111", "101"},
-	'Y': {"101", "101", "010", "010", "010"},
-	'%': {"10001", "00010", "00100", "01000", "10001"},
-	'=': {"000", "111", "000", "111", "000"},
-	'-': {"000", "000", "111", "000", "000"},
-	'.': {"0", "0", "0", "0", "1"},
-	':': {"0", "1", "0", "1", "0"},
-	'/': {"001", "001", "010", "100", "100"},
+	return b
 }

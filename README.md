@@ -20,7 +20,8 @@ Tiny Go daemon for Orange Pi and similar SBCs. It tracks CPU temperature, CPU us
   - memory usage
   - root filesystem usage
 - Sends Telegram alerts with hysteresis and cooldown
-- Sends daily and weekly summaries with text sparklines for temperature, CPU, and load
+- Exports daily and weekly CSV snapshots
+- Sends daily and weekly summaries as Telegram photos with a caption
 - Keeps up to 8 days of raw samples
 
 ## Project layout
@@ -130,19 +131,17 @@ sudo systemctl restart opi-thermald
 - Data: `/var/lib/opi-thermald/`
 - Samples: `/var/lib/opi-thermald/samples.jsonl`
 - State: `/var/lib/opi-thermald/state.json`
+- CSV exports: `/var/lib/opi-thermald/exports/daily-latest.csv` and `/var/lib/opi-thermald/exports/weekly-latest.csv`
 
 ## Summary format
 
-Daily and weekly summaries include compact text graphs that render well in Telegram:
+Daily and weekly summaries are sent as PNG images to Telegram with a text caption that contains the main stats.
 
 ```text
 orangepi-ultra daily summary
 Temp min/avg/max: 46.1/58.3/76.4C
-Temp: ▁▁▂▂▃▄▅▆▇█
 CPU avg/max: 8.22/61.44%
-CPU:  ▁▁▁▂▂▃▄▅▆▆
 Load1 avg/max: 0.42/2.31
-Load: ▁▁▁▁▂▂▃▄▅▆
 Samples above warn: 12/2880
 ```
 

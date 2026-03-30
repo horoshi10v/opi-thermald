@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"time"
@@ -62,6 +63,47 @@ func (c *Client) Send(message string) error {
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", c.botToken)
 	resp, err := c.http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return fmt.Errorf("telegram returned %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *Client) SendPhoto(filename, caption string, data []byte) error {
+	if !c.Enabled() {
+		return nil
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	if err := writer.WriteField("chat_id", c.chatID); err != nil {
+		return err
+	}
+	if caption != "" {
+		if err := writer.WriteField("caption", caption); err != nil {
+			return err
+		}
+	}
+
+	part, err := writer.CreateFormFile("photo", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(data); err != nil {
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", c.botToken)
+	resp, err := c.http.Post(endpoint, writer.FormDataContentType(), &body)
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/valentyn-khoroshylov/opi-thermald/internal/collector"
+	"github.com/horoshi10v/opi-thermald/internal/collector"
 )
 
 type State struct {
@@ -21,14 +21,17 @@ type State struct {
 }
 
 type Store struct {
+	dataDir     string
 	samplesPath string
 	statePath   string
 }
 
 func New(dataDir string) *Store {
+	cleanDataDir := filepath.Clean(dataDir)
 	return &Store{
-		samplesPath: filepath.Join(dataDir, "samples.jsonl"),
-		statePath:   filepath.Join(dataDir, "state.json"),
+		dataDir:     cleanDataDir,
+		samplesPath: filepath.Join(cleanDataDir, "samples.jsonl"),
+		statePath:   filepath.Join(cleanDataDir, "state.json"),
 	}
 }
 
@@ -65,11 +68,20 @@ func (s *Store) LoadState() (State, error) {
 }
 
 func (s *Store) SaveState(state State) error {
+	if err := os.MkdirAll(s.dataDir, 0o755); err != nil {
+		return err
+	}
+
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.statePath, data, 0o644)
+
+	tmpPath := s.statePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, s.statePath)
 }
 
 func (s *Store) SamplesSince(since time.Time) ([]collector.Sample, error) {

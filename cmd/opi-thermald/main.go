@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/valentyn-khoroshylov/opi-thermald/internal/config"
-	"github.com/valentyn-khoroshylov/opi-thermald/internal/service"
+	"github.com/horoshi10v/opi-thermald/internal/config"
+	"github.com/horoshi10v/opi-thermald/internal/service"
 )
 
 func main() {

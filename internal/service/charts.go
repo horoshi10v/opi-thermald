@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -62,35 +63,67 @@ func bucketize(samples []collector.Sample, bucketCount int, valueFn func(collect
 
 func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error) {
 	const (
-		width   = 1200
-		height  = 720
-		padding = 48
+		width        = 1280
+		height       = 860
+		outerPadding = 40
+		headerHeight = 86
+		footerHeight = 44
+		panelGap     = 24
 	)
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	bg := color.RGBA{248, 250, 252, 255}
+	bg := color.RGBA{10, 14, 22, 255}
 	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
 
-	plotRect := image.Rect(padding, padding, width-padding, height-padding)
-	grid := color.RGBA{226, 232, 240, 255}
-	text := color.RGBA{15, 23, 42, 255}
-	tempColor := color.RGBA{220, 38, 38, 255}
-	cpuColor := color.RGBA{37, 99, 235, 255}
-	loadColor := color.RGBA{22, 163, 74, 255}
+	panelBg := color.RGBA{17, 24, 39, 255}
+	grid := color.RGBA{51, 65, 85, 255}
+	text := color.RGBA{226, 232, 240, 255}
+	muted := color.RGBA{148, 163, 184, 255}
+	tempColor := color.RGBA{248, 113, 113, 255}
+	cpuColor := color.RGBA{96, 165, 250, 255}
+	loadColor := color.RGBA{74, 222, 128, 255}
 
-	fillRect(img, plotRect.Min.X, plotRect.Min.Y, plotRect.Dx(), plotRect.Dy(), color.RGBA{255, 255, 255, 255})
-	drawFrame(img, plotRect, grid)
-	for i := 1; i < 4; i++ {
-		y := plotRect.Min.Y + i*plotRect.Dy()/4
-		drawLine(img, plotRect.Min.X, y, plotRect.Max.X, y, grid)
-	}
+	fillRect(img, outerPadding, outerPadding, width-outerPadding*2, height-outerPadding*2, panelBg)
+	drawTinyText(img, outerPadding+20, outerPadding+18, title, text)
+	drawTinyText(img, outerPadding+20, outerPadding+46, "DARK THEME SUMMARY", muted)
 
-	drawTinyText(img, padding, 16, title, text)
-	drawTinyText(img, padding, height-24, "red=temp C blue=cpu% green=load1", text)
+	panelTop := outerPadding + headerHeight
+	panelWidth := width - outerPadding*2 - 32
+	panelHeight := (height - outerPadding*2 - headerHeight - footerHeight - panelGap*2 - 32) / 3
+	panelX := outerPadding + 16
 
-	drawSeries(img, plotRect, temp, tempColor)
-	drawSeries(img, plotRect, cpu, cpuColor)
-	drawSeries(img, plotRect, load, loadColor)
+	drawSeriesPanel(
+		img,
+		image.Rect(panelX, panelTop, panelX+panelWidth, panelTop+panelHeight),
+		"TEMP C",
+		temp,
+		tempColor,
+		grid,
+		text,
+		muted,
+	)
+	drawSeriesPanel(
+		img,
+		image.Rect(panelX, panelTop+panelHeight+panelGap, panelX+panelWidth, panelTop+panelHeight*2+panelGap),
+		"CPU PERCENT",
+		cpu,
+		cpuColor,
+		grid,
+		text,
+		muted,
+	)
+	drawSeriesPanel(
+		img,
+		image.Rect(panelX, panelTop+panelHeight*2+panelGap*2, panelX+panelWidth, panelTop+panelHeight*3+panelGap*2),
+		"LOAD1",
+		load,
+		loadColor,
+		grid,
+		text,
+		muted,
+	)
+
+	drawTinyText(img, outerPadding+20, height-outerPadding-22, "EXPORTS RAW DATA TO CSV AND SENDS PNG TO TELEGRAM", muted)
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -99,21 +132,32 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 	return buf.Bytes(), nil
 }
 
+func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values []float64, lineColor, gridColor, textColor, mutedColor color.Color) {
+	fillRect(img, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), color.RGBA{15, 23, 42, 255})
+	drawFrame(img, rect, gridColor)
+
+	headerY := rect.Min.Y + 16
+	drawTinyText(img, rect.Min.X+18, headerY, label, textColor)
+
+	minVal, maxVal := seriesBounds(values)
+	statsText := fmt.Sprintf("MIN %.1f MAX %.1f", minVal, maxVal)
+	drawTinyText(img, rect.Min.X+220, headerY, statsText, mutedColor)
+
+	plotRect := image.Rect(rect.Min.X+18, rect.Min.Y+54, rect.Max.X-18, rect.Max.Y-18)
+	for i := 1; i < 4; i++ {
+		y := plotRect.Min.Y + i*plotRect.Dy()/4
+		drawLine(img, plotRect.Min.X, y, plotRect.Max.X, y, gridColor)
+	}
+	drawFrame(img, plotRect, gridColor)
+	drawSeries(img, plotRect, values, lineColor)
+}
+
 func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col color.Color) {
 	if len(values) < 2 {
 		return
 	}
 
-	minVal := values[0]
-	maxVal := values[0]
-	for _, value := range values[1:] {
-		if value < minVal {
-			minVal = value
-		}
-		if value > maxVal {
-			maxVal = value
-		}
-	}
+	minVal, maxVal := seriesBounds(values)
 	if maxVal == minVal {
 		maxVal += 1
 	}
@@ -132,6 +176,24 @@ func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col col
 		}
 		lastX, lastY = x, y
 	}
+}
+
+func seriesBounds(values []float64) (float64, float64) {
+	if len(values) == 0 {
+		return 0, 0
+	}
+
+	minVal := values[0]
+	maxVal := values[0]
+	for _, value := range values[1:] {
+		if value < minVal {
+			minVal = value
+		}
+		if value > maxVal {
+			maxVal = value
+		}
+	}
+	return minVal, maxVal
 }
 
 func drawFrame(img *image.RGBA, rect image.Rectangle, col color.Color) {

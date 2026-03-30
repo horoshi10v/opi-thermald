@@ -17,6 +17,8 @@ type Sample struct {
 	CPUPercent  float64   `json:"cpu_percent"`
 	Load1       float64   `json:"load1"`
 	MemUsedPct  float64   `json:"mem_used_pct"`
+	MemUsedGB   float64   `json:"mem_used_gb"`
+	MemTotalGB  float64   `json:"mem_total_gb"`
 	DiskUsedPct float64   `json:"disk_used_pct"`
 }
 
@@ -42,7 +44,7 @@ func (c *Collector) Collect() (Sample, error) {
 		return Sample{}, fmt.Errorf("read loadavg: %w", err)
 	}
 
-	memUsedPct, err := c.readMemUsedPct()
+	memUsedPct, memUsedGB, memTotalGB, err := c.readMemoryUsage()
 	if err != nil {
 		return Sample{}, fmt.Errorf("read meminfo: %w", err)
 	}
@@ -63,6 +65,8 @@ func (c *Collector) Collect() (Sample, error) {
 		CPUPercent:  cpuPct,
 		Load1:       load1,
 		MemUsedPct:  memUsedPct,
+		MemUsedGB:   memUsedGB,
+		MemTotalGB:  memTotalGB,
 		DiskUsedPct: diskUsedPct,
 	}, nil
 }
@@ -87,10 +91,10 @@ func (c *Collector) readLoad1() (float64, error) {
 	return strconv.ParseFloat(fields[0], 64)
 }
 
-func (c *Collector) readMemUsedPct() (float64, error) {
+func (c *Collector) readMemoryUsage() (usedPct, usedGB, totalGB float64, err error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return 0, err
+		return 0, 0, 0, err
 	}
 	defer f.Close()
 
@@ -110,13 +114,18 @@ func (c *Collector) readMemUsedPct() (float64, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return 0, err
+		return 0, 0, 0, err
 	}
 	if memTotal <= 0 {
-		return 0, fmt.Errorf("MemTotal not found")
+		return 0, 0, 0, fmt.Errorf("MemTotal not found")
 	}
-	usedPct := ((memTotal - memAvailable) / memTotal) * 100
-	return round2(usedPct), nil
+
+	memUsed := memTotal - memAvailable
+	usedPct = ((memUsed) / memTotal) * 100
+	usedGB = round2(memUsed / 1024 / 1024)
+	totalGB = round2(memTotal / 1024 / 1024)
+
+	return round2(usedPct), usedGB, totalGB, nil
 }
 
 func (c *Collector) readDiskUsedPct(path string) (float64, error) {

@@ -65,12 +65,14 @@ func (s *Service) formatTempMessage(sample collector.Sample) string {
 
 func (s *Service) formatStatusMessage(sample collector.Sample) string {
 	return fmt.Sprintf(
-		"%s status\nTemp: %.1fC\nCPU: %.2f%%\nLoad1: %.2f\nMem: %.2f%%\nDisk: %.2f%%",
+		"%s status\nTemp: %.1fC\nCPU: %.2f%%\nLoad1: %.2f\nMem: %.2f%% (%.2f/%.2f GB)\nDisk: %.2f%%",
 		s.cfg.HostAlias,
 		float64(sample.TempMilliC)/1000,
 		sample.CPUPercent,
 		sample.Load1,
 		sample.MemUsedPct,
+		sample.MemUsedGB,
+		sample.MemTotalGB,
 		sample.DiskUsedPct,
 	)
 }

@@ -32,6 +32,8 @@ func (s *Service) exportSummaryCSV(label string, samples []collector.Sample) err
 		"cpu_percent",
 		"load1",
 		"mem_used_pct",
+		"mem_used_gb",
+		"mem_total_gb",
 		"disk_used_pct",
 	}); err != nil {
 		return err
@@ -44,6 +46,8 @@ func (s *Service) exportSummaryCSV(label string, samples []collector.Sample) err
 			fmt.Sprintf("%.2f", sample.CPUPercent),
 			fmt.Sprintf("%.2f", sample.Load1),
 			fmt.Sprintf("%.2f", sample.MemUsedPct),
+			fmt.Sprintf("%.2f", sample.MemUsedGB),
+			fmt.Sprintf("%.2f", sample.MemTotalGB),
 			fmt.Sprintf("%.2f", sample.DiskUsedPct),
 		}
 		if err := writer.Write(record); err != nil {

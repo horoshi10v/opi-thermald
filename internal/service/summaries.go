@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/horoshi10v/opi-thermald/internal/collector"
@@ -15,6 +16,9 @@ type summaryStats struct {
 	cpuMax         float64
 	memAvg         float64
 	memMax         float64
+	memUsedAvgGB   float64
+	memUsedMaxGB   float64
+	memTotalGB     float64
 	loadAvg        float64
 	loadMax        float64
 	aboveWarnCount int
@@ -110,7 +114,7 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		sampleCount: len(samples),
 	}
 
-	var tempSum, cpuSum, memSum, loadSum float64
+	var tempSum, cpuSum, memSum, memUsedGBSum, loadSum float64
 	for _, sample := range samples {
 		if sample.TempMilliC < stats.tempMin {
 			stats.tempMin = sample.TempMilliC
@@ -121,6 +125,7 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		tempSum += float64(sample.TempMilliC)
 		cpuSum += sample.CPUPercent
 		memSum += sample.MemUsedPct
+		memUsedGBSum += sample.MemUsedGB
 		loadSum += sample.Load1
 		if sample.CPUPercent > stats.cpuMax {
 			stats.cpuMax = sample.CPUPercent
@@ -128,17 +133,24 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 		if sample.MemUsedPct > stats.memMax {
 			stats.memMax = sample.MemUsedPct
 		}
+		if sample.MemUsedGB > stats.memUsedMaxGB {
+			stats.memUsedMaxGB = sample.MemUsedGB
+		}
 		if sample.Load1 > stats.loadMax {
 			stats.loadMax = sample.Load1
 		}
 		if sample.TempMilliC >= s.cfg.Temperature.WarnMilliC {
 			stats.aboveWarnCount++
 		}
+		if sample.MemTotalGB > 0 {
+			stats.memTotalGB = sample.MemTotalGB
+		}
 	}
 
 	stats.tempAvg = (tempSum / float64(len(samples))) / 1000
 	stats.cpuAvg = cpuSum / float64(len(samples))
 	stats.memAvg = memSum / float64(len(samples))
+	stats.memUsedAvgGB = memUsedGBSum / float64(len(samples))
 	stats.loadAvg = loadSum / float64(len(samples))
 	stats.tempSeries = bucketize(samples, bucketCount, func(sample collector.Sample) float64 {
 		return float64(sample.TempMilliC) / 1000
@@ -157,8 +169,12 @@ func (s *Service) computeSummaryStats(samples []collector.Sample, bucketCount in
 }
 
 func (s *Service) formatSummaryCaption(label string, stats summaryStats) string {
+	cpuCores := runtime.NumCPU()
+	loadAvgPerCore := stats.loadAvg / float64(cpuCores)
+	loadMaxPerCore := stats.loadMax / float64(cpuCores)
+
 	return fmt.Sprintf(
-		"%s %s summary\nTemp min/avg/max: %.1f/%.1f/%.1fC\nCPU avg/max: %.2f/%.2f%%\nRAM avg/max: %.2f/%.2f%%\nLoad1 avg/max: %.2f/%.2f\nSamples above warn: %d/%d",
+		"%s %s summary\nTemp min/avg/max: %.1f/%.1f/%.1fC\nCPU avg/max: %.2f/%.2f%%\nRAM avg/max: %.2f/%.2f%% (%.2f/%.2f GB of %.2f GB)\nLoad1 avg/max: %.2f/%.2f (%.2f/%.2f per core on %d cores)\nSamples above warn: %d/%d",
 		s.cfg.HostAlias,
 		label,
 		float64(stats.tempMin)/1000,
@@ -168,8 +184,14 @@ func (s *Service) formatSummaryCaption(label string, stats summaryStats) string 
 		stats.cpuMax,
 		stats.memAvg,
 		stats.memMax,
+		stats.memUsedAvgGB,
+		stats.memUsedMaxGB,
+		stats.memTotalGB,
 		stats.loadAvg,
 		stats.loadMax,
+		loadAvgPerCore,
+		loadMaxPerCore,
+		cpuCores,
 		stats.aboveWarnCount,
 		stats.sampleCount,
 	)

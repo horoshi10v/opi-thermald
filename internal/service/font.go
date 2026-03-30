@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"golang.org/x/image/font"
+	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 )
@@ -26,7 +27,7 @@ func newTextRenderer() *textRenderer {
 
 	fontData := loadSystemFont()
 	if len(fontData) == 0 {
-		return renderer
+		fontData = goregular.TTF
 	}
 
 	parsed, err := opentype.Parse(fontData)

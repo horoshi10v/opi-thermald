@@ -146,8 +146,8 @@ Daily and weekly summaries are sent as PNG images to Telegram with a text captio
 orangepi-ultra daily summary
 Temp min/avg/max: 46.1/58.3/76.4C
 CPU avg/max: 8.22/61.44%
-RAM avg/max: 22.40/31.85%
-Load1 avg/max: 0.42/2.31
+RAM avg/max: 22.40/31.85% (1.73/2.46 GB of 7.74 GB)
+Load1 avg/max: 0.42/2.31 (0.05/0.29 per core on 8 cores)
 Samples above warn: 12/2880
 ```
 

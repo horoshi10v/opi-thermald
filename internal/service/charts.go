@@ -61,7 +61,7 @@ func bucketize(samples []collector.Sample, bucketCount int, valueFn func(collect
 	return result
 }
 
-func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error) {
+func renderSummaryChart(title, periodLabel string, temp, cpu, load []float64) ([]byte, error) {
 	const (
 		width        = 1600
 		height       = 1080
@@ -84,8 +84,11 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 	loadColor := color.RGBA{74, 222, 128, 255}
 
 	fillRect(img, outerPadding, outerPadding, width-outerPadding*2, height-outerPadding*2, panelBg)
-	drawText(img, outerPadding+24, outerPadding+20, title, 3, text)
+	drawText(img, outerPadding+24, outerPadding+18, title, 4, text)
 	drawText(img, outerPadding+24, outerPadding+62, "DARK THEME SUMMARY", 2, muted)
+	drawLegendBlock(img, outerPadding+760, outerPadding+26, tempColor, text, muted, "TEMP C")
+	drawLegendBlock(img, outerPadding+980, outerPadding+26, cpuColor, text, muted, "CPU %")
+	drawLegendBlock(img, outerPadding+1170, outerPadding+26, loadColor, text, muted, "LOAD1")
 
 	panelTop := outerPadding + headerHeight
 	panelWidth := width - outerPadding*2 - 32
@@ -101,6 +104,7 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 		grid,
 		text,
 		muted,
+		timeAxisLabels(periodLabel),
 	)
 	drawSeriesPanel(
 		img,
@@ -111,6 +115,7 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 		grid,
 		text,
 		muted,
+		timeAxisLabels(periodLabel),
 	)
 	drawSeriesPanel(
 		img,
@@ -121,6 +126,7 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 		grid,
 		text,
 		muted,
+		timeAxisLabels(periodLabel),
 	)
 
 	drawText(img, outerPadding+24, height-outerPadding-28, "EXPORTS RAW DATA TO CSV AND SENDS PNG TO TELEGRAM", 2, muted)
@@ -132,12 +138,12 @@ func renderSummaryChart(title string, temp, cpu, load []float64) ([]byte, error)
 	return buf.Bytes(), nil
 }
 
-func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values []float64, lineColor, gridColor, textColor, mutedColor color.Color) {
+func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values []float64, lineColor, gridColor, textColor, mutedColor color.Color, axisLabels [3]string) {
 	fillRect(img, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), color.RGBA{15, 23, 42, 255})
 	drawFrame(img, rect, gridColor)
 
 	headerY := rect.Min.Y + 18
-	drawText(img, rect.Min.X+20, headerY, label, 2, textColor)
+	drawText(img, rect.Min.X+20, headerY, label, 3, textColor)
 
 	minVal, maxVal := seriesBounds(values)
 	statsText := fmt.Sprintf("MIN %.1f MAX %.1f", minVal, maxVal)
@@ -152,6 +158,7 @@ func drawSeriesPanel(img *image.RGBA, rect image.Rectangle, label string, values
 	drawFrame(img, plotRect, gridColor)
 	drawYAxisLabels(img, plotRect, minVal, maxVal, textColor, mutedColor)
 	drawSeries(img, plotRect, values, lineColor)
+	drawXAxisLabels(img, plotRect, axisLabels, mutedColor)
 }
 
 func drawSeries(img *image.RGBA, rect image.Rectangle, values []float64, col color.Color) {
@@ -188,6 +195,29 @@ func drawYAxisLabels(img *image.RGBA, plotRect image.Rectangle, minVal, maxVal f
 		label := fmt.Sprintf("%.1f", value)
 		drawText(img, plotRect.Min.X-70, y-7, label, 2, mutedColor)
 		drawLine(img, plotRect.Min.X-12, y, plotRect.Min.X-2, y, textColor)
+	}
+}
+
+func drawXAxisLabels(img *image.RGBA, plotRect image.Rectangle, labels [3]string, mutedColor color.Color) {
+	drawText(img, plotRect.Min.X, plotRect.Max.Y+14, labels[0], 2, mutedColor)
+	midX := plotRect.Min.X + plotRect.Dx()/2 - estimateTextWidth(labels[1], 2)/2
+	drawText(img, midX, plotRect.Max.Y+14, labels[1], 2, mutedColor)
+	rightX := plotRect.Max.X - estimateTextWidth(labels[2], 2)
+	drawText(img, rightX, plotRect.Max.Y+14, labels[2], 2, mutedColor)
+}
+
+func drawLegendBlock(img *image.RGBA, x, y int, lineColor, textColor, mutedColor color.Color, label string) {
+	fillRect(img, x, y+4, 18, 18, lineColor)
+	drawText(img, x+30, y, label, 2, textColor)
+	drawText(img, x+30, y+22, "SERIES", 1, mutedColor)
+}
+
+func timeAxisLabels(periodLabel string) [3]string {
+	switch strings.ToLower(periodLabel) {
+	case "weekly":
+		return [3]string{"7D AGO", "MID", "NOW"}
+	default:
+		return [3]string{"24H AGO", "MID", "NOW"}
 	}
 }
 
@@ -277,12 +307,12 @@ func drawText(img *image.RGBA, x, y int, text string, scale int, col color.Color
 	cursor := x
 	for _, r := range strings.ToUpper(text) {
 		if r == ' ' {
-			cursor += 3 * scale
+			cursor += 2 * scale
 			continue
 		}
 		pattern, ok := glyphPattern(r)
 		if !ok {
-			cursor += 3 * scale
+			cursor += 2 * scale
 			continue
 		}
 		for row, line := range pattern {
@@ -294,8 +324,26 @@ func drawText(img *image.RGBA, x, y int, text string, scale int, col color.Color
 			}
 		}
 		charWidth := len(pattern[0])
-		cursor += (charWidth+2)*scale + scale
+		cursor += (charWidth+1)*scale + 1
 	}
+}
+
+func estimateTextWidth(text string, scale int) int {
+	width := 0
+	for _, r := range strings.ToUpper(text) {
+		if r == ' ' {
+			width += 2 * scale
+			continue
+		}
+		pattern, ok := glyphPattern(r)
+		if !ok {
+			width += 2 * scale
+			continue
+		}
+		charWidth := len(pattern[0])
+		width += (charWidth+1)*scale + 1
+	}
+	return width
 }
 
 func glyphPattern(r rune) ([]string, bool) {

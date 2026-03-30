@@ -87,6 +87,7 @@ func (s *Service) sendSummary(now time.Time, spec summarySpec) error {
 	caption := s.formatSummaryCaption(spec.label, stats)
 	chart, err := renderSummaryChart(
 		fmt.Sprintf("%s %s summary", s.cfg.HostAlias, spec.label),
+		spec.label,
 		stats.tempSeries,
 		stats.cpuSeries,
 		stats.loadSeries,

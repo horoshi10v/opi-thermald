@@ -11,6 +11,8 @@ import (
 	"github.com/horoshi10v/opi-thermald/internal/collector"
 )
 
+const maxSampleLineBytes = 4 * 1024 * 1024
+
 type State struct {
 	AlertLevel       string    `json:"alert_level"`
 	AlertActive      bool      `json:"alert_active"`
@@ -96,6 +98,7 @@ func (s *Store) SamplesSince(since time.Time) ([]collector.Sample, error) {
 
 	samples := make([]collector.Sample, 0, 1024)
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), maxSampleLineBytes)
 	for scanner.Scan() {
 		var sample collector.Sample
 		if err := json.Unmarshal(scanner.Bytes(), &sample); err != nil {
@@ -129,6 +132,7 @@ func (s *Store) PruneSamples(keepSince time.Time) error {
 	}
 
 	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 64*1024), maxSampleLineBytes)
 	writer := bufio.NewWriter(tmp)
 	for scanner.Scan() {
 		var sample collector.Sample
